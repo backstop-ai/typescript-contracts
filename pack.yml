@@ -1,0 +1,122 @@
+name: backstop/contracts
+version: 1.0.1
+language: typescript
+archetype: enforcement
+description: >
+  TypeScript contracts pack — the TS counterpart to backstop/contracts (which is
+  Go-only). backstop-core ships NO contract analyzer; signature presence is a
+  pack-compiled ast-grep REQUIRED-pattern query (the signature->ast-grep-pattern
+  compiler is scripts/compile-signature.sh — the binary never compiles a signature),
+  and the COMPILED pattern is fed via pattern-arg to the pack-declared
+  ast-grep-contracts engine through the real dispatch. Symbol absence is a
+  pack-declared grep text-presence probe. Each engine ships its own convert script
+  (ast-grep/ + grep/). All TypeScript knowledge lives in this pack.
+engines:
+  # Pack-declared grep engine (symbol absence). grep is a Layer-0 tool (version "*").
+  grep:
+    command: grep -rn
+    input_mode: pattern-arg
+    input_flag: -e
+    scope_kind: file-args
+    category: opinion
+    gate_type: contracts
+    convert: grep/to-sarif.sh
+    provision:
+      tool: grep
+      version: "*"
+  # Pack-declared ast-grep contracts engine (pattern-arg): the compiled signature
+  # pattern is fed via --pattern, the scan target appended by dispatch. ast-grep
+  # infers TypeScript from the .ts/.tsx extension. The convert normalizes ast-grep
+  # JSON to SARIF.
+  ast-grep-contracts:
+    command: ast-grep run --json
+    input_mode: pattern-arg
+    input_flag: --pattern
+    scope_kind: file-args
+    category: opinion
+    gate_type: contracts
+    convert: ast-grep/to-sarif.sh
+    provision:
+      tool: ast-grep
+      version: 0.43.0
+content:
+  ruleset:
+    version: 1.0.0
+    rules:
+      # Signature presence: at gate time the pattern is supplied at dispatch
+      # (pattern-arg) from scripts/compile-signature.sh. These static self-test
+      # rules freeze one representative pattern per TS declaration kind so the
+      # pack's own suite exercises every kind the compiler emits.
+      - id: contract-signature
+        engine: ast-grep-contracts
+        risk_class: correctness
+        pattern: "function $NAME($$$PARAMS) { $$$BODY }"
+        claims:
+          - id: contract-signature-ts
+            text: A present declared function signature matches via ast-grep.
+            fixtures:
+              positive:
+                - testdata/fixtures/sig-present.ts
+              negative:
+                - testdata/fixtures/sig-mismatch.ts
+      - id: type-signature
+        engine: ast-grep-contracts
+        risk_class: correctness
+        pattern: "type $NAME = $$$RHS"
+        claims:
+          - id: type-signature-ts
+            text: A TS type alias matches the type structural pattern (the '=' is required).
+            fixtures:
+              positive:
+                - testdata/fixtures/sig-kinds-present.ts
+              negative:
+                - testdata/fixtures/sig-kinds-mismatch.ts
+      - id: interface-signature
+        engine: ast-grep-contracts
+        risk_class: correctness
+        pattern: "interface $NAME { $$$BODY }"
+        claims:
+          - id: interface-signature-ts
+            text: An interface declaration matches the interface structural pattern.
+            fixtures:
+              positive:
+                - testdata/fixtures/sig-kinds-present.ts
+              negative:
+                - testdata/fixtures/sig-kinds-mismatch.ts
+      - id: const-signature
+        engine: ast-grep-contracts
+        risk_class: correctness
+        pattern: "const $NAME = $$$RHS"
+        claims:
+          - id: const-signature-ts
+            text: A const declaration matches the const structural pattern.
+            fixtures:
+              positive:
+                - testdata/fixtures/sig-kinds-present.ts
+              negative:
+                - testdata/fixtures/sig-kinds-mismatch.ts
+      - id: class-signature
+        engine: ast-grep-contracts
+        risk_class: correctness
+        pattern: "class $NAME { $$$BODY }"
+        claims:
+          - id: class-signature-ts
+            text: A class declaration matches the class structural pattern.
+            fixtures:
+              positive:
+                - testdata/fixtures/sig-kinds-present.ts
+              negative:
+                - testdata/fixtures/sig-kinds-mismatch.ts
+      # Symbol absence: forbidden symbol probed via grep text-presence over the scope.
+      - id: contract-absence
+        engine: grep
+        risk_class: correctness
+        pattern: "legacyProbeSymbol"
+        claims:
+          - id: contract-absence-ts
+            text: A forbidden symbol present in scope is an absence violation.
+            fixtures:
+              positive:
+                - testdata/fixtures/absence-present.ts
+              negative:
+                - testdata/fixtures/absence-clean.ts
