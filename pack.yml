@@ -1,5 +1,5 @@
 name: backstop/contracts
-version: 1.0.1
+version: 1.1.0
 language: typescript
 archetype: enforcement
 description: >
@@ -41,7 +41,7 @@ engines:
       version: 0.43.0
 content:
   ruleset:
-    version: 1.0.0
+    version: 1.1.0
     rules:
       # Signature presence: at gate time the pattern is supplied at dispatch
       # (pattern-arg) from scripts/compile-signature.sh. These static self-test
