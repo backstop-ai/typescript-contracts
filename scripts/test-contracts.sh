@@ -39,10 +39,25 @@ nested_pattern=$(sh "$root/scripts/compile-signature.sh" 'const Nested = { neste
 nested_matches=$(ast-grep run --json --pattern "$nested_pattern" "$root/testdata/fixtures/const-object-present.ts")
 printf '%s' "$nested_matches" | jq -e 'length == 1' >/dev/null
 
+# Bare-const variable idiom (typescript-contracts#1): `const name // prose` — the RHS is
+# prose-documented, not signature-checked (drizzle-table contracts in the wild). Compiles
+# to the name-presence pattern and matches regardless of initializer. This REVERSES the
+# earlier deliberate rejection of bare `const x` (it was an established consumer idiom);
+# garbage after the name that is not a comment stays rejected below.
+bare_pattern=$(sh "$root/scripts/compile-signature.sh" 'const CheckTypeFindings // prose-documented table, no initializer')
+[ "$bare_pattern" = 'const CheckTypeFindings = $$$' ]
+assert_match 'const CheckTypeFindings // prose-documented table, no initializer'
+
+# Re-export alias idiom (typescript-contracts#1): `export { A as b } from "…"` is a
+# legitimate contract surface (Next.js route-segment config MUST be a static re-export).
+# The signature compiles to itself as an exact pattern; single quotes normalize to double.
+reexport_pattern=$(sh "$root/scripts/compile-signature.sh" "export { SCHEDULED_MAX as maxDuration } from '../../reconcile/cron-route.js'")
+[ "$reexport_pattern" = 'export { SCHEDULED_MAX as maxDuration } from "../../reconcile/cron-route.js"' ]
+
 for unsupported in \
   'CheckType | Stringer' \
   'function broken(' \
-  'const x' \
+  'const x garbage' \
   'const x = 1; const y = 2' \
   'const x=1;const y=2' \
   'const x = 1; garbage' \

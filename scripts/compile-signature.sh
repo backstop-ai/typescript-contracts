@@ -65,7 +65,7 @@ case "$sig" in
     else printf 'function %s($$$) { $$$ }' "$name"; fi ;;
   "const "*)
     body=$(trim "${sig#const }"); name=${body%%[ :=]*}
-    [ -n "$name" ] && printf '%s' "$body" | grep -Eq '[:=]' || fail
+    [ -n "$name" ] || fail
     case "$body" in
       *=*)
         lhs=${body%%=*}
@@ -74,8 +74,21 @@ case "$sig" in
           *) printf 'const %s = $$$' "$name" ;;
         esac ;;
       *:*) printf 'const %s: $$$' "$name" ;;
-      *)   printf 'const %s' "$name" ;;
+      # Bare const — the established variable-kind idiom `const name // prose`: the
+      # trailing comment is stripped above, the RHS is deliberately prose-documented
+      # rather than signature-checked. Compile to a name-presence pattern matching any
+      # initializer. Anything after the name that was not a comment stays rejected.
+      *)   [ "$body" = "$name" ] || fail
+           printf 'const %s = $$$' "$name" ;;
     esac ;;
+  "export {"*)
+    # Re-export alias declarations — `export { A as b } from "…"` — are legitimate
+    # contract surfaces (e.g. Next.js route-segment config MUST be a static re-export;
+    # an imported-binding `const` is rejected by the framework's static analysis). The
+    # signature already IS a concrete statement: emit it verbatim as an exact pattern
+    # (quotes normalized above). Malformed brace-exports fail the ast-grep pre-check.
+    printf '%s' "$sig" | grep -q '}' || fail
+    printf '%s' "$sig" ;;
   "class "*)
     body=$(trim "${sig#class }"); name=${body%%[ {<]*}
     [ -n "$name" ] && printf '%s' "$body" | grep -Eq '\{.*\};?[[:space:]]*$' || fail
